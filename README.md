@@ -1,0 +1,2 @@
+# Bernkastel
+Personal Discord Bot
