@@ -1,0 +1,70 @@
+{
+  "AMQ": [
+    {
+      "name": "Q1",
+      "options": [
+        "Attack on Titan",
+        "Sword Art Online",
+        "Gundam 79",
+        "Clannad After Story",
+        "Toradora"
+      ],
+      "answer": 2
+    },
+    {
+      "name": "Q2",
+      "options": [
+        "Attack on Titan",
+        "Sword Art Online",
+        "Eighty Six",
+        "Clannad After Story",
+        "Toradora"
+      ],
+      "answer": 3
+    },
+    {
+      "name": "Q3",
+      "options": [
+        "Attack on Titan",
+        "FullMetal Alchemist",
+        "Gundam 79",
+        "Clannad After Story",
+        "Toradora"
+      ],
+      "answer": 4
+    },
+    {
+      "name": "Q4",
+      "options": [
+        "Berserk",
+        "Sword Art Online",
+        "Gundam 79",
+        "Clannad After Story",
+        "Toradora"
+      ],
+      "answer": 5
+    },
+    {
+      "name": "Q5",
+      "options": [
+        "Attack on Titan",
+        "Sword Art Online",
+        "Gundam 79",
+        "Umineko",
+        "Toradora"
+      ],
+      "answer": 1
+    },
+    {
+      "name": "Q6",
+      "options": [
+        "Attack on Titan",
+        "Sword Art Online",
+        "Shinsekai Yori",
+        "Clannad After Story",
+        "Toradora"
+      ],
+      "answer": 4
+    }
+  ]
+}
