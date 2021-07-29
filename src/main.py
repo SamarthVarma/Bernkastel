@@ -40,7 +40,7 @@ class Options(discord.ui.Button):
         self.optnumber = optnumber + 1
     
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(f'You Selected {self.option}, {self.optnumber}, {interaction.user.id}', ephemeral=True)
+        await interaction.response.send_message(f'You Selected {self.option}', ephemeral=True)
         insert_query = """INSERT INTO question_scoresheet(id, username, score, option) VALUES (%s, %s, %s, %s)ON CONFLICT(id) DO UPDATE SET option = EXCLUDED.option;"""
         vars =  interaction.user.id,interaction.user.name,0,self.optnumber
         cur.execute(insert_query,vars)
@@ -74,8 +74,9 @@ class Question(discord.ui.View):
 activity = discord.Activity(type=discord.ActivityType.listening, name="The Executioner")
 bern = Bot(activity)
 
-@bern.command(name='ok')
-async def sendmp(ctx):
+@commands.is_owner()
+@bern.command(name='AMQ')
+async def animeMusicQuiz(ctx):
     url = os.path.join(root_url, 'assets\\AMQ\\')  
     delete_query = """ DELETE FROM main_scoresheet;"""
     cur.execute(delete_query)
@@ -108,16 +109,12 @@ async def sendmp(ctx):
     if(len(result)>0):
         embed.add_field(name="🥇", value=f"```{result[0][1]} (SCORE: {result[0][2]})```", inline = False)
         embed.set_thumbnail(url=ctx.guild.get_member(result[0][0]).avatar.url)
-
     if(len(result)>1):
         embed.add_field(name="🥈", value=f"```{result[1][1]} (SCORE: {result[1][2]})```", inline = False)
     if(len(result)>2):
         embed.add_field(name="🥉", value=f"```{result[2][1]} (SCORE: {result[2][2]})```", inline = False)
 
     await ctx.send(embed=embed)
-    # cur.execute("""\copy (SELECT RANK () OVER ( ORDER BY score DESC ) rank, username AS name, score FROM main_scoresheet) 
-    # TO %(value)s DELIMITER ',' CSV HEADER;""", {"value": url_csv})
-    #cur.execute("""\copy (SELECT * FROM main_scoresheet) TO 'C:/Users/Samarth/Downloads/resultssql3.csv' DELIMITER ',' CSV HEADER;""")
     query = """SELECT RANK () OVER ( ORDER BY score DESC ) rank, username AS name, score FROM main_scoresheet;"""
     cur.execute(query)
     fieldnames = ['Rank','Name','Score']
@@ -131,6 +128,10 @@ async def sendmp(ctx):
                 pass
     conn.commit()
     await ctx.send(content="Complete Results", file=discord.File("result.csv"))
-    #os.remove('table.csv')
+
+@animeMusicQuiz.error
+async def animeMusicQuiz_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send('Only Bot Owner can run this command')
 
 bern.run(config.token)
