@@ -7,13 +7,14 @@ from initialize import *
 import psycopg2
 import json
 import os
+import csv
 
 root_url = os.path.dirname(os.getcwd())
 config_parser = configparser.ConfigParser()
 config_parser.read('bot_config.ini')
 
 config = config(config_parser)
-f = open('questions.json',) #VSC takes root as default directory, so take care depending on the situation
+f = open('AMQ.json',) #VSC takes root as default directory, so take care depending on the situation
 data = json.load(f)
 conn = psycopg2.connect(    
             host=config.host,
@@ -29,8 +30,8 @@ class Bot(commands.Bot):
         super().__init__(command_prefix=commands.when_mentioned_or('$!$'), intents = discord.Intents.all(), activity = activity)
 
     async def on_ready(self):
-        channel = bern.get_channel(config.log_ch) 
-        await channel.send(f'Logged in as {bern.user} (ID: {bern.user.id})')
+        #channel = bern.get_channel(config.log_ch) 
+        print(f'Logged in as {bern.user} (ID: {bern.user.id})')
 
 class Options(discord.ui.Button):
     def __init__(self,option,optnumber):
@@ -64,9 +65,10 @@ class Question(discord.ui.View):
             self.message: discord.Message
             await self.message.edit(view=self)
     
-    async def on_timeout(self, correct):
-        self.disable(correct)
-        await self.refresh_message()
+    async def on_timeout(self, correct=10):
+        if(correct != 10):
+            self.disable(correct)
+            await self.refresh_message()
 
 
 activity = discord.Activity(type=discord.ActivityType.listening, name="The Executioner")
@@ -84,16 +86,51 @@ async def sendmp(ctx):
     for i in range(len(data['AMQ'])):
         myfile = discord.File(os.path.join(url,f"Q{i+1}.mp3"))
         option = data['AMQ'][i]['options']
-       # option = ["Attack on Titan","Sword Art Online","Gundam 79", "Shinsekai Yori", "Toradora"]
         v = Question(option)
         v.message = await ctx.send(content=data['AMQ'][i]['name'],file=myfile, view=v)
-        await asyncio.sleep(10)
+        await asyncio.sleep(4)
         await v.on_timeout(data['AMQ'][i]['answer'])
+        await asyncio.sleep(3)
         cur.execute("""UPDATE question_scoresheet SET score=1 WHERE option=%(value)s;""", {"value": data['AMQ'][i]['answer']})
         conn.commit()
         cur.execute("""INSERT INTO main_scoresheet SELECT id, username, score FROM question_scoresheet ON CONFLICT(id) DO UPDATE SET score = main_scoresheet.score + EXCLUDED.score, username = EXCLUDED.username;""")
         conn.commit()
         cur.execute(""" DELETE FROM question_scoresheet;""")
         conn.commit()
+    
+    cur.execute("""SELECT * FROM main_scoresheet ORDER BY score DESC""")
+    conn.commit()
+    result = cur.fetchall();
+    embed = discord.Embed(colour=discord.Colour(0x31af14), url="https://discordapp.com")
+    embed.set_author(name="RESULTS", url="https://discordapp.com")
+
+    embed.add_field(name="___", value="​", inline = False)
+    if(len(result)>0):
+        embed.add_field(name="🥇", value=f"```{result[0][1]} (SCORE: {result[0][2]})```", inline = False)
+        embed.set_thumbnail(url=ctx.guild.get_member(result[0][0]).avatar.url)
+
+    if(len(result)>1):
+        embed.add_field(name="🥈", value=f"```{result[1][1]} (SCORE: {result[1][2]})```", inline = False)
+    if(len(result)>2):
+        embed.add_field(name="🥉", value=f"```{result[2][1]} (SCORE: {result[2][2]})```", inline = False)
+
+    await ctx.send(embed=embed)
+    # cur.execute("""\copy (SELECT RANK () OVER ( ORDER BY score DESC ) rank, username AS name, score FROM main_scoresheet) 
+    # TO %(value)s DELIMITER ',' CSV HEADER;""", {"value": url_csv})
+    #cur.execute("""\copy (SELECT * FROM main_scoresheet) TO 'C:/Users/Samarth/Downloads/resultssql3.csv' DELIMITER ',' CSV HEADER;""")
+    query = """SELECT RANK () OVER ( ORDER BY score DESC ) rank, username AS name, score FROM main_scoresheet;"""
+    cur.execute(query)
+    fieldnames = ['Rank','Name','Score']
+    with open('result.csv', 'w', newline='', encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(fieldnames)
+        for row in cur.fetchall():
+            try:
+                writer.writerow(row)
+            except:
+                pass
+    conn.commit()
+    await ctx.send(content="Complete Results", file=discord.File("result.csv"))
+    #os.remove('table.csv')
 
 bern.run(config.token)
