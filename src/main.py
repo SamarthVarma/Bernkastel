@@ -6,12 +6,14 @@ import configparser
 from initialize import *
 import psycopg2
 import json
+import os
 
+root_url = os.path.dirname(os.getcwd())
 config_parser = configparser.ConfigParser()
 config_parser.read('bot_config.ini')
 
 config = config(config_parser)
-f = open('src/questions.json',) #VSC takes root as default directory, so take care depending on the situation
+f = open('questions.json',) #VSC takes root as default directory, so take care depending on the situation
 data = json.load(f)
 conn = psycopg2.connect(    
             host=config.host,
@@ -43,8 +45,6 @@ class Options(discord.ui.Button):
         cur.execute(insert_query,vars)
         conn.commit()
 
-
-
 class Question(discord.ui.View):
     def __init__(self, options):
         super().__init__(timeout=30.0)
@@ -69,11 +69,12 @@ class Question(discord.ui.View):
         await self.refresh_message()
 
 
-activity = discord.Activity(type=discord.ActivityType.listening, name="Hapiness of Marionette")
+activity = discord.Activity(type=discord.ActivityType.listening, name="The Executioner")
 bern = Bot(activity)
 
 @bern.command(name='ok')
 async def sendmp(ctx):
+    url = os.path.join(root_url, 'assets\\AMQ\\')  
     delete_query = """ DELETE FROM main_scoresheet;"""
     cur.execute(delete_query)
     conn.commit()
@@ -81,7 +82,7 @@ async def sendmp(ctx):
     cur.execute(delete_query)
     conn.commit()
     for i in range(len(data['AMQ'])):
-        myfile = discord.File('C:/Users/Samarth/Documents/Github-Repo/discord bot testing/sample1.mp3')
+        myfile = discord.File(os.path.join(url,f"Q{i+1}.mp3"))
         option = data['AMQ'][i]['options']
        # option = ["Attack on Titan","Sword Art Online","Gundam 79", "Shinsekai Yori", "Toradora"]
         v = Question(option)
