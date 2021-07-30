@@ -48,7 +48,7 @@ class Options(discord.ui.Button):
 
 class Question(discord.ui.View):
     def __init__(self, options):
-        super().__init__(timeout=30.0)
+        super().__init__(timeout=50.0)
         self.options = options
         for x in range (5):
                 self.add_item(Options(self.options[x], x))
@@ -89,9 +89,11 @@ async def animeMusicQuiz(ctx):
         option = data['AMQ'][i]['options']
         v = Question(option)
         v.message = await ctx.send(content=data['AMQ'][i]['name'],file=myfile, view=v)
-        await asyncio.sleep(4)
+        await asyncio.sleep(35)
         await v.on_timeout(data['AMQ'][i]['answer'])
         await asyncio.sleep(3)
+        await ctx.send('----')
+        await asyncio.sleep(2)
         cur.execute("""UPDATE question_scoresheet SET score=1 WHERE option=%(value)s;""", {"value": data['AMQ'][i]['answer']})
         conn.commit()
         cur.execute("""INSERT INTO main_scoresheet SELECT id, username, score FROM question_scoresheet ON CONFLICT(id) DO UPDATE SET score = main_scoresheet.score + EXCLUDED.score, username = EXCLUDED.username;""")
