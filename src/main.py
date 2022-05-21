@@ -8,6 +8,7 @@ import psycopg2
 import json
 import os
 import csv
+from datetime import datetime
 
 root_url = os.path.dirname(os.getcwd())
 config_parser = configparser.ConfigParser()
@@ -34,9 +35,10 @@ class Bot(commands.Bot):
         print(f'Logged in as {bern.user} (ID: {bern.user.id})')
 
 class Options(discord.ui.Button):
-    def __init__(self,option,optnumber):
+    def __init__(self,option,optnumber, qnum):
         super().__init__(style=discord.ButtonStyle.secondary, label=option, row=1)
         self.option = option
+        self.qnum = qnum
         self.optnumber = optnumber + 1
     
     async def callback(self, interaction: discord.Interaction):
@@ -45,18 +47,24 @@ class Options(discord.ui.Button):
         vars =  interaction.user.id,interaction.user.name,0,self.optnumber
         cur.execute(insert_query,vars)
         conn.commit()
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  self.qnum,interaction.user.id,interaction.user.name,datetime.now().time(),self.optnumber
+        cur.execute(insert_query,vars)
+        conn.commit()
 
 class Question(discord.ui.View):
-    def __init__(self, options):
+    def __init__(self, options, number):
         super().__init__(timeout=50.0)
         self.options = options
         for x in range (5):
-                self.add_item(Options(self.options[x], x))
+                self.add_item(Options(self.options[x], x, number))
+        #self.add_item(DeSelectButton(number))
         self.v = self.children
 
     def disable(self, correct):
         for item in self.children:
-            if(item.optnumber == correct): item.style = discord.ButtonStyle.success
+            if(item.optnumber == 0): pass
+            elif(item.optnumber == correct): item.style = discord.ButtonStyle.success
             else : item.style = discord.ButtonStyle.danger
             item.disabled = True
         return self
@@ -70,6 +78,22 @@ class Question(discord.ui.View):
             self.disable(correct)
             await self.refresh_message()
 
+class DeSelectButton(discord.ui.Button):
+    def __init__(self,qnum):
+        super().__init__(style=discord.ButtonStyle.primary, label="Unselect", row=2)
+        self.qnum = qnum
+        self.optnumber = 0
+    
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'Unselected', ephemeral=True)
+        insert_query = """DELETE FROM question_scoresheet WHERE id = %s;"""
+        vars =  interaction.user.id
+        cur.execute(insert_query,[vars])
+        conn.commit()
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  self.qnum,interaction.user.id,interaction.user.name,datetime.now().time(),0
+        cur.execute(insert_query,vars)
+        conn.commit()
 
 activity = discord.Activity(type=discord.ActivityType.listening, name="The Executioner")
 bern = Bot(activity)
@@ -84,18 +108,28 @@ async def animeMusicQuiz(ctx):
     delete_query = """ DELETE FROM question_scoresheet;"""
     cur.execute(delete_query)
     conn.commit()
+    delete_query = """ DELETE FROM logs;"""
+    cur.execute(delete_query)
+    conn.commit()
     for i in range(len(data['AMQ'])):
         myfile = discord.File(os.path.join(url,f"Q{i+1}.mp3"))
         option = data['AMQ'][i]['options']
-        v = Question(option)
+        v = Question(option, i+1)
         v.message = await ctx.send(content=data['AMQ'][i]['name'],file=myfile, view=v)
-        await asyncio.sleep(35)
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  i+1,1,'bern',datetime.now().time(),data['AMQ'][i]['answer']
+        cur.execute(insert_query,vars)
+        conn.commit()
+        await v.message.add_reaction('a:timer30:892667595566743623')
+        await asyncio.sleep(30)
         await v.on_timeout(data['AMQ'][i]['answer'])
-        await asyncio.sleep(3)
-        await ctx.send('----')
         await asyncio.sleep(2)
+        await ctx.send('-----------------------------------')
+        await asyncio.sleep(3)
         cur.execute("""UPDATE question_scoresheet SET score=1 WHERE option=%(value)s;""", {"value": data['AMQ'][i]['answer']})
         conn.commit()
+        #cur.execute("""UPDATE question_scoresheet SET score=-1 WHERE option!=%(value)s;""", {"value": data['AMQ'][i]['answer']})
+        #conn.commit()
         cur.execute("""INSERT INTO main_scoresheet SELECT id, username, score FROM question_scoresheet ON CONFLICT(id) DO UPDATE SET score = main_scoresheet.score + EXCLUDED.score, username = EXCLUDED.username;""")
         conn.commit()
         cur.execute(""" DELETE FROM question_scoresheet;""")
