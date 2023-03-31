@@ -1,0 +1,211 @@
+from asyncio.tasks import sleep
+import discord
+from discord.ext import commands
+import asyncio
+import configparser
+from initialize import *
+import psycopg2
+import json
+import os
+import csv
+from datetime import datetime
+
+root_url = os.path.dirname(os.getcwd())
+config_parser = configparser.ConfigParser()
+config_parser.read('bot_config.ini')
+
+config = config(config_parser)
+f = open('AMQ.json',) #VSC takes root as default directory, so take care depending on the situation
+data = json.load(f)
+f2 = open('AMQ2.json',) #VSC takes root as default directory, so take care depending on the situation
+data2 = json.load(f2)
+conn = psycopg2.connect(    
+            host=config.host,
+            database=config.database,
+            user=config.user,
+            password=config.password
+            )
+
+cur = conn.cursor()
+
+class Bot(commands.Bot):
+    def __init__(self, activity):
+        super().__init__(command_prefix=commands.when_mentioned_or('$!$'), intents = discord.Intents.all(), activity = activity)
+
+    async def on_ready(self):
+        #channel = bern.get_channel(config.log_ch) 
+        print(f'Logged in as {bern.user} (ID: {bern.user.id})')
+
+class Options(discord.ui.Button):
+    def __init__(self,option,optnumber, qnum):
+        super().__init__(style=discord.ButtonStyle.secondary, label=option, row=1)
+        self.option = option
+        self.qnum = qnum
+        self.optnumber = optnumber + 1
+    
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'You Selected {self.option}', ephemeral=True)
+        insert_query = """INSERT INTO question_scoresheet(id, username, score, option) VALUES (%s, %s, %s, %s)ON CONFLICT(id) DO UPDATE SET option = EXCLUDED.option;"""
+        vars =  interaction.user.id,interaction.user.name,0,self.optnumber
+        cur.execute(insert_query,vars)
+        conn.commit()
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  self.qnum,interaction.user.id,interaction.user.name,datetime.now().time(),self.optnumber
+        cur.execute(insert_query,vars)
+        conn.commit()
+
+class Question(discord.ui.View):
+    def __init__(self, options, number):
+        super().__init__(timeout=50.0)
+        self.options = options
+        for x in range (5):
+                self.add_item(Options(self.options[x], x, number))
+        #self.add_item(DeSelectButton(number))
+        self.v = self.children
+
+    def disable(self, correct):
+        for item in self.children:
+            if(item.optnumber == 0): pass
+            elif(item.optnumber == correct): item.style = discord.ButtonStyle.success
+            else : item.style = discord.ButtonStyle.danger
+            item.disabled = True
+        return self
+
+    async def refresh_message(self):
+            self.message: discord.Message
+            await self.message.edit(view=self)
+    
+    async def on_timeout(self, correct=10):
+        if(correct != 10):
+            self.disable(correct)
+            await self.refresh_message()
+
+class DeSelectButton(discord.ui.Button):
+    def __init__(self,qnum):
+        super().__init__(style=discord.ButtonStyle.primary, label="Unselect", row=2)
+        self.qnum = qnum
+        self.optnumber = 0
+    
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'Unselected', ephemeral=True)
+        insert_query = """DELETE FROM question_scoresheet WHERE id = %s;"""
+        vars =  interaction.user.id
+        cur.execute(insert_query,[vars])
+        conn.commit()
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  self.qnum,interaction.user.id,interaction.user.name,datetime.now().time(),0
+        cur.execute(insert_query,vars)
+        conn.commit()
+
+activity = discord.Activity(type=discord.ActivityType.listening, name="The Executioner")
+bern = Bot(activity)
+
+@commands.is_owner()
+@bern.command(name='AMQ')
+async def animeMusicQuiz(ctx):
+    print(ctx.author.id)
+#    if ctx.author.id == 782223220497580053:
+    url = os.path.join(root_url, 'assets\\AMQ\\')  
+    delete_query = """ DELETE FROM main_scoresheet;"""
+    cur.execute(delete_query)
+    conn.commit()
+    delete_query = """ DELETE FROM question_scoresheet;"""
+    cur.execute(delete_query)
+    conn.commit()
+    delete_query = """ DELETE FROM logs;"""
+    cur.execute(delete_query)
+    conn.commit()
+    delete_query = """ DELETE FROM set_scoresheet;"""
+    cur.execute(delete_query)
+    conn.commit()
+    art=0
+    for i in range(len(data['AMQ'])):
+        if(i%3==0):       
+            await ctx.send(content = f"SET {art+1}")
+        myfile = discord.File(os.path.join(url,f"Q{i+1}.mp3"))
+        option = data['AMQ'][i]['options']
+        v = Question(option, i+1)
+        v.message = await ctx.send(content=data['AMQ'][i]['name'],file=myfile, view=v)
+        insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+        vars =  i+1,1,'bern',datetime.now().time(),data['AMQ'][i]['answer']
+        cur.execute(insert_query,vars)
+        conn.commit()
+        await v.message.add_reaction('a:timer30:892667595566743623')
+        await asyncio.sleep(30)
+        await v.on_timeout(data['AMQ'][i]['answer'])
+        await asyncio.sleep(2)
+        await ctx.send('-----')
+        await asyncio.sleep(2)
+        cur.execute("""UPDATE question_scoresheet SET score=1 WHERE option=%(value)s;""", {"value": data['AMQ'][i]['answer']})
+        conn.commit()
+        #cur.execute("""UPDATE question_scoresheet SET score=-1 WHERE option!=%(value)s;""", {"value": data['AMQ'][i]['answer']})
+        #conn.commit()
+        cur.execute("""INSERT INTO set_scoresheet SELECT id, username, score FROM question_scoresheet ON CONFLICT(id) DO UPDATE SET score = set_scoresheet.score + EXCLUDED.score, username = EXCLUDED.username;""")
+        conn.commit()
+        cur.execute(""" DELETE FROM question_scoresheet;""")
+        conn.commit()
+        if(i%3==2):
+            option = data2['AMQ'][art]['options']
+            v = Question(option, i+1)
+            v.message = await ctx.send(content=data2['AMQ'][art]['name'], view=v)
+            insert_query = """INSERT INTO logs(question, id, username, tym, option) VALUES (%s, %s, %s,%s, %s);"""
+            vars =  i+1,1,'bern',datetime.now().time(),data2['AMQ'][art]['answer']
+            cur.execute(insert_query,vars)
+            conn.commit()
+            await v.message.add_reaction('a:timer15:998252197504622693')
+            await asyncio.sleep(15)
+            await v.on_timeout(data2['AMQ'][art]['answer'])
+            await asyncio.sleep(2)
+            await ctx.send('\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_')
+            await asyncio.sleep(2)
+            cur.execute("""UPDATE question_scoresheet SET score=1 WHERE option=%(value)s;""", {"value": data2['AMQ'][art]['answer']})
+            conn.commit()
+            cur.execute("""INSERT INTO set_scoresheet SELECT id, username, score FROM question_scoresheet ON CONFLICT(id) DO UPDATE SET score = GREATEST(set_scoresheet.score * EXCLUDED.score * 2, EXCLUDED.score), username = EXCLUDED.username;""")
+            conn.commit()
+            #cur.execute("""UPDATE question_scoresheet SET score=-1 WHERE option!=%(value)s;""", {"value": data['AMQ'][i]['answer']})
+            #conn.commit()
+            cur.execute("""INSERT INTO main_scoresheet SELECT id, username, score FROM set_scoresheet ON CONFLICT(id) DO UPDATE SET score = main_scoresheet.score + EXCLUDED.score, username = EXCLUDED.username;""")
+            conn.commit()
+            cur.execute(""" DELETE FROM question_scoresheet;""")
+            conn.commit() 
+            cur.execute(""" DELETE FROM set_scoresheet;""")
+            conn.commit()                
+            art = art + 1
+
+    
+    cur.execute("""SELECT * FROM main_scoresheet ORDER BY score DESC""")
+    conn.commit()
+    result = cur.fetchall();
+    embed = discord.Embed(colour=discord.Colour(0x31af14), url="https://discordapp.com")
+    embed.set_author(name="RESULTS", url="https://discordapp.com")
+
+    embed.add_field(name="___", value="​", inline = False)
+    if(len(result)>0):
+        embed.add_field(name="🥇", value=f"```{result[0][1]} (SCORE: {result[0][2]})```", inline = False)
+        embed.set_thumbnail(url=ctx.guild.get_member(result[0][0]).avatar.url)
+    if(len(result)>1):
+        embed.add_field(name="🥈", value=f"```{result[1][1]} (SCORE: {result[1][2]})```", inline = False)
+    if(len(result)>2):
+        embed.add_field(name="🥉", value=f"```{result[2][1]} (SCORE: {result[2][2]})```", inline = False)
+
+    await ctx.send(embed=embed)
+    query = """SELECT RANK () OVER ( ORDER BY score DESC ) rank, username AS name, score FROM main_scoresheet;"""
+    cur.execute(query)
+    fieldnames = ['Rank','Name','Score']
+    with open('result.csv', 'w', newline='', encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=',')
+        writer.writerow(fieldnames)
+        for row in cur.fetchall():
+            try:
+                writer.writerow(row)
+            except:
+                pass
+    conn.commit()
+    await ctx.send(content="Complete Results", file=discord.File("result.csv"))
+
+@animeMusicQuiz.error
+async def animeMusicQuiz_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send('Only Bot Owner can run this command')
+
+bern.run(config.token)
