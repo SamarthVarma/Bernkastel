@@ -40,11 +40,17 @@ This has to be on the same path as main2.py
 Path: src/bot_config.ini
 
 [secret]
+
 token = <INSERT_BOT_TOKEN>
+
 log_ch = <CHANNEL_ID_TO_DEBUG> (this is optional)
 
 [postgres]
+
 host=localhost
+
 database=<LOCAL_DATABASE_PASSWORD>
+
 user=postgres
+
 password=<DATABASE_PASSWORD>
