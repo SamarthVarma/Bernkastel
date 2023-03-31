@@ -41,16 +41,16 @@ Path: src/bot_config.ini
 
 [secret]
 
-token = <INSERT_BOT_TOKEN>
+`token = <INSERT_BOT_TOKEN>`
 
-log_ch = <CHANNEL_ID_TO_DEBUG> (this is optional)
+`log_ch = <CHANNEL_ID_TO_DEBUG>` (this is optional)
 
 [postgres]
 
-host=localhost
+`host=localhost`
 
-database=<LOCAL_DATABASE_PASSWORD>
+`database=<LOCAL_DATABASE_PASSWORD>`
 
-user=postgres
+`user=postgres`
 
-password=<DATABASE_PASSWORD>
+`password=<DATABASE_PASSWORD>`
